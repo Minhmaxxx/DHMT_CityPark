@@ -5,7 +5,7 @@
 #include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <Vector_Matrix.h>
-
+#include <math.h>
 using namespace std;
 //Thêm tam giác màu
 static const float coloredTriangle[] = {
@@ -168,6 +168,7 @@ is_scaled = false;
 
 //---------------------------------------------Khai báo các biến sử dụng để vẽ------------------------------------------
 float Alpha = 0.0f;
+
 //thiết lập chỉ mục cho menu
 enum {
 	//chair
@@ -688,7 +689,7 @@ namespace cay {
 		model_mat_cpp = mvstack.pop();
 	}
 
-	
+
 	// Hàm vẽ cây với các tham số biến đổi (dịch chuyển và thay đổi kích thước)
 	void vecay(float tx, float ty, float tz, float sx, float sy, float sz) {
 		mvstack.push(model_mat_cpp);
@@ -728,10 +729,10 @@ void vebanan(float tx, float ty, float tz, float sx, float sy, float sz, GLfloat
 }//---------Vẽ hình tròn---------------
 void hinhtron(float x, float y, float z, float sx, float sy, float sz, int color) {
 	mvstack.push(model_mat_cpp);
-	setInt("color",  color);  // Đặt màu cho tán lá (màu xanh lá cây hoặc phù hợp)
+	setInt("color", color);  // Đặt màu cho tán lá (màu xanh lá cây hoặc phù hợp)
 
 	mat4 instance = identity_mat4();
-	instance = translate(vec3(x, y , z)) *  // Đặt tán lá ở trên đỉnh của thân cây
+	instance = translate(vec3(x, y, z)) *  // Đặt tán lá ở trên đỉnh của thân cây
 		scale(vec3(sx, sy, sz)); // Kích thước của hình nón cho tán lá
 
 	mat4 model_leaves = model_mat_cpp * instance;
@@ -742,9 +743,12 @@ void hinhtron(float x, float y, float z, float sx, float sy, float sz, int color
 	model_mat_cpp = mvstack.pop();
 }
 
-//-----------Đèn đường
+//----------Đèn đường-------------
+bool moden = false;
+int soden = 0;
 void denduong(float x, float y, float z, float sx, float sy, float sz) {
 	// Phần thân
+	soden += 1;
 	mvstack.push(model_mat_cpp);
 	setInt("color", 1);
 	mat4 instance = identity_mat4();
@@ -753,8 +757,53 @@ void denduong(float x, float y, float z, float sx, float sy, float sz) {
 	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post.m);
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	model_mat_cpp = mvstack.pop();
-	//Phần trên
-	
+
+	mvstack.push(model_mat_cpp);
+	setInt("color", 1);
+	mat4 instance1 = identity_mat4();
+	instance1 = translate(vec3(x, y, z)) * translate(vec3(-0.85f, 2.45f, 0)) * rotate_z(90.0f) * scale(vec3(sx, sy / 2, sz));
+	mat4 model_post1 = model_mat_cpp * instance1;
+	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post1.m);
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	model_mat_cpp = mvstack.pop();
+
+	mvstack.push(model_mat_cpp);
+	setInt("color", 1);
+	mat4 instance2 = identity_mat4();
+	instance2 = translate(vec3(x, y, z)) * translate(vec3(-0.55f, 1.85f, 0)) * rotate_z(45.0f) * scale(vec3(sx, 1.6f, sz / 2));
+	mat4 model_post2 = model_mat_cpp * instance2;
+	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post2.m);
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	model_mat_cpp = mvstack.pop();
+
+	mvstack.push(model_mat_cpp);
+	setInt("color", 1);
+	mat4 instance3 = identity_mat4();
+	instance3 = translate(vec3(x, y, z)) * translate(vec3(-1.7f, 2.15f, 0)) * scale(vec3(0.05f, 0.4f, 0.05f));
+	mat4 model_post3 = model_mat_cpp * instance3;
+	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post3.m);
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	model_mat_cpp = mvstack.pop();
+	//Phần đèn
+
+	mvstack.push(model_mat_cpp);
+	setInt("color", 15);
+	mat4 than = identity_mat4();
+	than = translate(vec3(x, y, z)) * translate(vec3(-1.7f, 1.9f, 0)) * scale(vec3(0.45f, 0.45f, 0.45f));
+	vec4 finalPosition = than * vec4(0, 0, 0, 1);
+	mat4 model_than = model_mat_cpp * than;
+	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_than.m);
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	// Dịch chuyển và co giãn vector 3D
+	vec4 thanPosition = vec4(x, y, z, 1.0f);  // Vị trí ban đầu
+	thanPosition = thanPosition + vec4(-1.7f, 1.9f, 0.0f, 0.0f);  // Dịch chuyển
+	thanPosition = thanPosition * vec4(0.45f, 0.45f, 0.45f, 1.0f);  // Co giãn
+	glUniform1i(glGetUniformLocation(ProgramId, "enable_light_3"), moden);
+	glUniform1i(glGetUniformLocation(ProgramId, "soden"), soden);
+	glUniform3f(glGetUniformLocation(ProgramId, "light_color_custom"), 0.94, 0.9, 0.55); // Màu ánh sáng vàng nhạt
+	glUniform4f(glGetUniformLocation(ProgramId, "light_position_custom"), -(x - 1.7f - 0.5f), y + 1.9f, -(z + 6), 1.0f); // Vị trí đèn
+	model_mat_cpp = mvstack.pop();
+
 
 }
 //----------Ve thung rac-------------------
@@ -788,17 +837,14 @@ namespace duquay {
 
 	// Hàm vẽ ghế trên con quay (có thể là hình hộp hoặc hình chóp)
 	void veGhe() {
-		
+
 	}
 
-	
+
 
 	// Hàm vẽ con quay (hình trụ)
 	void veConQuay() {
-		// Lưu trạng thái ma trận ban đầu
-		mvstack.push(model_mat_cpp);
 
-		setInt("color", 8);  // Đặt màu cho vòng quay
 
 	}
 
@@ -807,7 +853,7 @@ namespace duquay {
 		// Lưu trạng thái ma trận ban đầu
 		mvstack.push(model_mat_cpp);
 
-		setInt("color",4);  // Đặt màu cho giá đỡ bánh xe
+		setInt("color", 4);  // Đặt màu cho giá đỡ bánh xe
 
 		// Tham số cho các vị trí và góc xoay của mỗi giá đỡ
 		vec3 positions[4] = {
@@ -822,8 +868,8 @@ namespace duquay {
 		for (int i = 0; i < 4; i++) {
 			// Khởi tạo ma trận instance với phép biến đổi riêng cho mỗi giá đỡ
 			mat4 instance = identity_mat4();
-			instance = translate(positions[i]) * rotate_z(rotations[i]) * scale(vec3(0.3f,6.0f,0.2f)); // Vị trí và xoay mỗi giá đỡ
-			mat4 model_support = model_mat_cpp * instance ; // Biến đổi cuối cùng cho mỗi giá đỡ
+			instance = translate(positions[i]) * rotate_z(rotations[i]) * scale(vec3(0.3f, 6.0f, 0.2f)); // Vị trí và xoay mỗi giá đỡ
+			mat4 model_support = model_mat_cpp * instance; // Biến đổi cuối cùng cho mỗi giá đỡ
 
 			// Cập nhật ma trận mô hình và vẽ giá đỡ
 			glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_support.m);
@@ -942,8 +988,11 @@ void DisplayFunc(void)
 	//float barWidth, float barHeight, float barDepth) {
 	//Đu quay
 	duquay::veDe();
-	veThungrac(15,-0.8,11,0.5,0.7,0.5);
-	denduong(13, -0.8, 11, 0.2, 1.5, 0.2);
+	// Thùng rác 
+	veThungrac(15, -0.8, 11, 0.5, 0.7, 0.5);
+	//Đèn đường
+	denduong(17, 1.2, 11, 0.25, 5, 0.25);
+	denduong(13, 1.2, 11, 0.25, 5, 0.25);
 	model_mat_cpp = mvstack.pop();
 
 	glutSwapBuffers();
@@ -1100,7 +1149,12 @@ void KeyboardFunc(unsigned char key, int x, int y)
 	case 'm':
 		mo_thungrac = !mo_thungrac;
 		break;
+		// Đèn
+	case 'b':
+		moden = !moden;
+		break;
 	}
+
 }
 // ----------------------------------------
 
