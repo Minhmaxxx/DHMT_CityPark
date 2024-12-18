@@ -488,10 +488,10 @@ namespace diem_max_min {
 #define chieucaongan 0.5
 
 // ------ Thông số cho cây ------
-#define chieucao_than 0.8      // Chiều cao của thân cây
-#define duong_kinh_than 0.1    // Đường kính của thân cây
-#define chieucao_la 1.5f       // Chiều cao của phần lá (tán cây)
-#define duong_kinh_la 1.0f     // Đường kính lớn nhất của phần lá
+#define chieucao_than 2.5     // Chiều cao của thân cây
+#define duong_kinh_than 0.3    // Đường kính của thân cây
+#define chieucao_la 1.7f       // Chiều cao của phần lá (tán cây)
+#define duong_kinh_la 2.5f     // Đường kính lớn nhất của phần lá
 //---------Tương tác với thùng rác-------------
 bool mo_thungrac = false;
 
@@ -605,8 +605,7 @@ namespace hangrao {
 
 		mat4 instance = identity_mat4();
 		// Dịch chuyển tới vị trí cần vẽ
-		instance = translate(vec3(x, y, z)) *
-			scale(vec3(width, height, depth)); // Kích thước cột
+		instance = translate(vec3(x, y, z)) * scale(vec3(width, height, depth));
 
 		mat4 model_column = model_mat_cpp * instance;
 		glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_column.m);
@@ -616,6 +615,7 @@ namespace hangrao {
 
 		model_mat_cpp = mvstack.pop();
 	}
+
 	void veThanhNgang(float x, float y, float z, float width, float height, float depth) {
 		mvstack.push(model_mat_cpp);
 
@@ -624,8 +624,7 @@ namespace hangrao {
 
 		mat4 instance = identity_mat4();
 		// Dịch chuyển tới vị trí cần vẽ
-		instance = translate(vec3(x, y / 2, z)) *
-			scale(vec3(width, height, depth)); // Kích thước thanh ngang
+		instance = translate(vec3(x, y, z)) * scale(vec3(width, height, depth));
 
 		mat4 model_bar = model_mat_cpp * instance;
 		glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_bar.m);
@@ -635,34 +634,42 @@ namespace hangrao {
 
 		model_mat_cpp = mvstack.pop();
 	}
+
 	void veHangRao(float startX, float startY, float startZ, float spacing, int numColumns,
 		float columnWidth, float columnHeight, float columnDepth,
-		float barWidth, float barHeight, float barDepth) {
+		float barWidth, float barHeight, float barDepth, float angle) {
+		mvstack.push(model_mat_cpp);
 
-		// Vẽ các cột	
+		// Thêm xoay tổng quát cho hàng rào
+		model_mat_cpp = model_mat_cpp * translate(vec3(startX, startY, startZ)) * rotate_y(angle);
+
+		// Vẽ các cột
 		for (int i = 0; i < numColumns; ++i) {
-			float x = startX + i * spacing;
-			veCot(x, startY, startZ, columnWidth, columnHeight, columnDepth);
+			float x = i * spacing; // Khoảng cách giữa các cột
+			veCot(x, 0, 0, columnWidth, columnHeight, columnDepth); // Không cần startX, startY vì đã dịch tổng thể
 		}
-		// Vẽ thanh ngang nối các cột
-		for (int i = 1; i < numColumns - 2; ++i) {
 
-			float x = startX + i * spacing + spacing / 2.0f;
-			float z = startZ;
-			veThanhNgang(x, -0.8 + startY + columnHeight / 2.0f, z, barWidth, barHeight, barDepth);
-			veThanhNgang(x, -0.8 + startY - columnHeight / 2.0f, z, barWidth, barHeight, barDepth);
+		// Vẽ thanh ngang nối các cột
+		for (int i = 0; i < numColumns - 1; ++i) {
+			float x = i * spacing + spacing / 2.0f;
+			veThanhNgang(x, columnHeight / 2.0f, 0, barWidth, barHeight, barDepth);
+			veThanhNgang(x, -columnHeight / 2.0f, 0, barWidth, barHeight, barDepth);
 		}
+
+		model_mat_cpp = mvstack.pop(); // Phục hồi ma trận gốc
 	}
 }
+
 namespace cay {
 	// Hàm vẽ thân cây (hình trụ)
-	void vethancay() {
+	void vethancay(float rotate) {
 		mvstack.push(model_mat_cpp);
-		setInt("color", 10);  // Đặt màu cho thân cây (màu nâu hoặc màu phù hợp cho gỗ)
+		setInt("color", 10); // Màu gỗ
 
 		mat4 instance = identity_mat4();
-		instance = translate(vec3(0.0, chieucao_than / 2.0, 0.0)) * // Đặt thân cây từ gốc tọa độ đi lên
-			scale(vec3(duong_kinh_than, chieucao_than, duong_kinh_than)); // Kích thước hình trụ cho thân cây
+		instance = translate(vec3(0.0, chieucao_than / 2.0, 0.0)) *
+			scale(vec3(duong_kinh_than, chieucao_than, duong_kinh_than)) *
+			rotate_y(rotate); // Quay thân cây theo trục Y
 
 		mat4 model_trunk = model_mat_cpp * instance;
 
@@ -672,49 +679,76 @@ namespace cay {
 		model_mat_cpp = mvstack.pop();
 	}
 
-	// Hàm vẽ tán lá (hình nón)
-	void velacay() {
+	// Hàm vẽ tán lá (tạo hiệu ứng nhiều lớp và ngẫu nhiên)
+	void velacay(float sway_angle) {
 		mvstack.push(model_mat_cpp);
-		setInt("color", 5);  // Đặt màu cho tán lá (màu xanh lá cây hoặc phù hợp)
+		setInt("color", 5); // Màu xanh lá cây
 
-		mat4 instance = identity_mat4();
-		instance = translate(vec3(0.0, chieucao_than + chieucao_la / 2.0, 0.0)) *  // Đặt tán lá ở trên đỉnh của thân cây
-			scale(vec3(duong_kinh_la, chieucao_la, duong_kinh_la)); // Kích thước của hình nón cho tán lá
+		for (int i = 0; i < 3; ++i) {
+			float scale_factor = 1.0f - 0.3f * i; // Lớp tán nhỏ dần
+			float height_offset = i * chieucao_la * 0.5f; // Tán lá cao hơn mỗi lớp
 
-		mat4 model_leaves = model_mat_cpp * instance;
+			mat4 instance = identity_mat4();
+			instance = translate(vec3(0.0, chieucao_than + height_offset, 0.0)) *
+				rotate_y(sway_angle) * // Hiệu ứng đung đưa
+				scale(vec3(duong_kinh_la * scale_factor, chieucao_la * scale_factor, duong_kinh_la * scale_factor));
 
-		glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_leaves.m);
-		glDrawArrays(GL_TRIANGLES, 0, 36);  // Vẽ tán lá với hình nón
+			mat4 model_leaves = model_mat_cpp * instance;
+
+			glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_leaves.m);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+		}
 
 		model_mat_cpp = mvstack.pop();
 	}
+	void velacay2(float sway_angle) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 5); // Màu xanh lá cây
 
+		for (int i = 0; i < 3; ++i) {
+			float scale_factor = 1.0f - 0.3f * i; // Lớp tán nhỏ dần
+			float height_offset = i * chieucao_la * 0.5f; // Tán lá cao hơn mỗi lớp
 
-	// Hàm vẽ cây với các tham số biến đổi (dịch chuyển và thay đổi kích thước)
+			mat4 instance = identity_mat4();
+			instance = translate(vec3(0.0, chieucao_than + height_offset, 0.0)) *
+				rotate_y(sway_angle) * // Hiệu ứng đung đưa
+				scale(vec3(duong_kinh_la * scale_factor, chieucao_la * scale_factor, duong_kinh_la * scale_factor)) *
+				rotate_y(45);
+
+			mat4 model_leaves = model_mat_cpp * instance;
+
+			glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_leaves.m);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+		}
+
+		model_mat_cpp = mvstack.pop();
+	}
+	// Hàm vẽ cây với đung đưa
 	void vecay(float tx, float ty, float tz, float sx, float sy, float sz) {
 		mvstack.push(model_mat_cpp);
 
-		// Dịch chuyển và thay đổi kích thước thân cây
+		// Dịch chuyển và thay đổi kích thước toàn bộ cây
 		model_mat_cpp = model_mat_cpp * translate(vec3(tx, -1.15, tz)) * scale(vec3(sx, sy, sz));
-		cay::vethancay(); // Vẽ thân cây
 
+		// Tính góc đung đưa
+		float elapsed_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Chuyển mili giây sang giây
+		float sway_angle = 10.0f * sin(elapsed_time); // Biên độ 5 độ, thay đổi theo thời gian
+
+		// Vẽ thân cây
+		cay::vethancay(0);
+		cay::vethancay(45);
+		cay::vethancay(90);
+
+		// Dịch chuyển để vẽ tán lá
 		mvstack.push(model_mat_cpp);
-
-		// Dịch chuyển để vẽ tán lá (tán lá có thể được vẽ ở phía trên thân cây)
-		model_mat_cpp = model_mat_cpp * translate(vec3(0, 0, 0)); // Dịch chuyển tán lá lên trên
-		cay::velacay(); // Vẽ tán lá, với radius_tan là bán kính của tán lá
-		model_mat_cpp = model_mat_cpp * translate(vec3(0.5, 0.1, 0.5)); // Dịch chuyển tán lá lên trên
-		cay::velacay();
-		model_mat_cpp = model_mat_cpp * translate(vec3(-0.5, 0, 0.5)); // Dịch chuyển tán lá lên trên
-		cay::velacay();
-		model_mat_cpp = model_mat_cpp * translate(vec3(-0.5, 0.1, -0.5)); // Dịch chuyển tán lá lên trên
-		cay::velacay();
-
+		cay::velacay(sway_angle);
+		cay::velacay2(sway_angle);
 		model_mat_cpp = mvstack.pop();
 
 		model_mat_cpp = mvstack.pop();
 	}
 }
+
 void vebanan(float tx, float ty, float tz, float sx, float sy, float sz, GLfloat ngankeo) {
 	mvstack.push(model_mat_cpp);
 
@@ -745,67 +779,81 @@ void hinhtron(float x, float y, float z, float sx, float sy, float sz, int color
 
 //----------Đèn đường-------------
 bool moden = false;
-int soden = 0;
-void denduong(float x, float y, float z, float sx, float sy, float sz) {
+#define MAX_LIGHTS 10
+vec4 lightPositions[MAX_LIGHTS];
+int numLights = 0; // Số đèn hiện có
+
+void denduong(float x, float y, float z, float sx, float sy, float sz, float angle) {
+	// Áp dụng xoay tổng thể
+	mvstack.push(model_mat_cpp);
+	model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * rotate_y(angle); // Xoay cả đèn quanh trục Y tại vị trí x, y, z
+
 	// Phần thân
-	soden += 1;
 	mvstack.push(model_mat_cpp);
 	setInt("color", 1);
 	mat4 instance = identity_mat4();
-	instance = translate(vec3(x, y, z)) * scale(vec3(sx, sy, sz));
+	instance = scale(vec3(sx, sy, sz));
 	mat4 model_post = model_mat_cpp * instance;
 	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post.m);
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	model_mat_cpp = mvstack.pop();
 
+	// Tay đèn ngang
 	mvstack.push(model_mat_cpp);
 	setInt("color", 1);
 	mat4 instance1 = identity_mat4();
-	instance1 = translate(vec3(x, y, z)) * translate(vec3(-0.85f, 2.45f, 0)) * rotate_z(90.0f) * scale(vec3(sx, sy / 2, sz));
+	instance1 = translate(vec3(-0.85f, 2.45f, 0)) * rotate_z(90.0f) * scale(vec3(sx, sy / 2, sz));
 	mat4 model_post1 = model_mat_cpp * instance1;
 	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post1.m);
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	model_mat_cpp = mvstack.pop();
 
+	// Tay đèn xiên
 	mvstack.push(model_mat_cpp);
 	setInt("color", 1);
 	mat4 instance2 = identity_mat4();
-	instance2 = translate(vec3(x, y, z)) * translate(vec3(-0.55f, 1.85f, 0)) * rotate_z(45.0f) * scale(vec3(sx, 1.6f, sz / 2));
+	instance2 = translate(vec3(-0.55f, 1.85f, 0)) * rotate_z(45.0f) * scale(vec3(sx, 1.6f, sz / 2));
 	mat4 model_post2 = model_mat_cpp * instance2;
 	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post2.m);
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	model_mat_cpp = mvstack.pop();
 
+	// Đầu nối
 	mvstack.push(model_mat_cpp);
 	setInt("color", 1);
 	mat4 instance3 = identity_mat4();
-	instance3 = translate(vec3(x, y, z)) * translate(vec3(-1.7f, 2.15f, 0)) * scale(vec3(0.05f, 0.4f, 0.05f));
+	instance3 = translate(vec3(-1.7f, 2.15f, 0)) * scale(vec3(0.05f, 0.4f, 0.05f));
 	mat4 model_post3 = model_mat_cpp * instance3;
 	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_post3.m);
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	model_mat_cpp = mvstack.pop();
-	//Phần đèn
 
+	// Phần đèn
 	mvstack.push(model_mat_cpp);
 	setInt("color", 15);
 	mat4 than = identity_mat4();
-	than = translate(vec3(x, y, z)) * translate(vec3(-1.7f, 1.9f, 0)) * scale(vec3(0.45f, 0.45f, 0.45f));
-	vec4 finalPosition = than * vec4(0, 0, 0, 1);
+	than = translate(vec3(-1.7f, 1.9f, 0)) * scale(vec3(0.45f, 0.45f, 0.45f));
 	mat4 model_than = model_mat_cpp * than;
 	glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_than.m);
 	glDrawArrays(GL_TRIANGLES, 0, 36);
-	// Dịch chuyển và co giãn vector 3D
-	vec4 thanPosition = vec4(x, y, z, 1.0f);  // Vị trí ban đầu
-	thanPosition = thanPosition + vec4(-1.7f, 1.9f, 0.0f, 0.0f);  // Dịch chuyển
-	thanPosition = thanPosition * vec4(0.45f, 0.45f, 0.45f, 1.0f);  // Co giãn
+
+	// Tính toán vị trí ánh sáng
+	if (numLights < MAX_LIGHTS) {
+		vec4 finalPosition = model_than * vec4(0, 0, 0, 1); // Vị trí sau phép biến đổi
+		lightPositions[numLights] = finalPosition;
+		numLights++;
+	}
+
+	// Cài đặt ánh sáng
 	glUniform1i(glGetUniformLocation(ProgramId, "enable_light_3"), moden);
-	glUniform1i(glGetUniformLocation(ProgramId, "soden"), soden);
 	glUniform3f(glGetUniformLocation(ProgramId, "light_color_custom"), 0.94, 0.9, 0.55); // Màu ánh sáng vàng nhạt
-	glUniform4f(glGetUniformLocation(ProgramId, "light_position_custom"), -(x - 1.7f - 0.5f), y + 1.9f, -(z + 6), 1.0f); // Vị trí đèn
+	glUniform4fv(glGetUniformLocation(ProgramId, "light_position_custom"), numLights, &lightPositions[0].x);
+	glUniform1i(glGetUniformLocation(ProgramId, "soden"), numLights); // Truyền số lượng đèn
+
+	model_mat_cpp = mvstack.pop(); // Phục hồi lại ma trận gốc
 	model_mat_cpp = mvstack.pop();
-
-
 }
+
 //----------Ve thung rac-------------------
 void veThungrac(float x, float y, float z, float sx, float sy, float sz) {
 	// vẽ phần thân
@@ -833,92 +881,218 @@ void veThungrac(float x, float y, float z, float sx, float sy, float sz) {
 	model_mat_cpp = mvstack.pop();
 }
 //---------Ve du quay-----------------
+bool isRotating = true; // Mặc định là quay
 namespace duquay {
 
-	// Hàm vẽ ghế trên con quay (có thể là hình hộp hoặc hình chóp)
-	void veGhe() {
+	void veThanhdoc(float x, float y, float z, float sx, float sy, float sz) {
+		mvstack.push(model_mat_cpp);
+
+
+		mat4 instance = identity_mat4();
+		instance = translate(vec3(x, y, z)) * translate(vec3(x / 2, 0, 0)) * rotate_x(90) * translate(vec3(-(x / 2), 0, 0)) * scale(vec3(sx, sy, sx));
+
+		mat4 model_trunk = model_mat_cpp * instance;
+
+		glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_trunk.m);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+
+		model_mat_cpp = mvstack.pop();
+	}
+
+	void veThanhngang(float x, float y, float z, float sx, float sy, float sz, float rotate) {
+		mvstack.push(model_mat_cpp);
+
+
+		mat4 instance = identity_mat4();
+		instance = translate(vec3(x, y, z)) * translate(vec3(x / 2, 0, 0)) * rotate_z(rotate) * translate(vec3(-(x / 2), 0, 0)) * scale(vec3(sx, sy, sz));
+
+		mat4 model_trunk = model_mat_cpp * instance;
+
+		glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_trunk.m);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+
+		model_mat_cpp = mvstack.pop();
+	}
+	void veGhe(float x, float y, float z, float sx, float sy, float sz) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 12);
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * scale(vec3(sx, sy, sz));
+		veThanhngang(0, -0.35, 0, 0.04, 0.4, 0.25, 0);
+		veThanhngang(0.12, -0.47, 0, 0.04, 0.4, 0.2, 90);
+		veThanhngang(0, 0, 0.08, 0.01, 0.45, 0.01, 0);
+		veThanhngang(0, 0, -0.08, 0.01, 0.45, 0.01, 0);
+
+		model_mat_cpp = mvstack.pop();
+	}
+	void veBatgiac(float x, float y, float z) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 11); // Màu gỗ
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z));
+		veThanhngang(0, 0, 0, 0.05, 1.5, 0.05, 90);
+		veThanhngang(-1.1, -0.15, 0, 0.05, 1.5, 0.05, 90 - 135);
+		veThanhngang(-1.8, -1.8, 0, 0.05, 1.5, 0.05, 0);
+		veThanhngang(-0.685, -2.82, 0, 0.05, 1.5, 0.05, 90 + 135);
+		veThanhngang(0, -3.575, 0, 0.05, 1.5, 0.05, 90);
+		veThanhngang(0.675, -0.775, 0, 0.05, 1.5, 0.05, 90 + 135);
+		veThanhngang(1.775, -1.8, 0, 0.05, 1.5, 0.05, 0);
+		veThanhngang(1.105, -3.45, 0, 0.05, 1.5, 0.05, 90 - 135);
+
+
+		model_mat_cpp = mvstack.pop();
+
+	}
+	void veTruc(float x, float y, float z, float sx, float sy, float sz) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 1); // Màu gỗ
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * scale(vec3(sx, sy, sz)) * rotate_z(45);
+		veThanhdoc(0, 0, 0.2, 1, 1, 1);
+		model_mat_cpp = mvstack.pop();
+		mvstack.push(model_mat_cpp);
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * scale(vec3(sx, sy, sz));
+		veThanhdoc(0, 0, 0.2, 1, 1, 1);
+		model_mat_cpp = mvstack.pop();
+	}
+	void veConQuayTo(float x, float y, float z, float sx, float sy, float sz) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 11); // Màu gỗ
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * translate(vec3(0, 1.4, 0)) * scale(vec3(sx, sy, sz));
+		veBatgiac(0, 0, 0);
+		veBatgiac(0, 0, +0.5);
+		// Các thanh gắn
+		veThanhdoc(+0.73, 0, +0.25, 0.05, 0.5, +z / 2);
+		veThanhdoc(-0.73, 0, +0.25, 0.05, 0.5, +z / 2);
+
+		veThanhdoc(-0.73 * 2.5 + 0.025, -1.05, +0.25, 0.05, 0.5, z / 2);
+		veThanhdoc(-0.73 * 2.5 + 0.025, -1.05 * 2.5 + 0.075, 0.25, 0.05, 0.5, z / 2);
+
+		veThanhdoc(+0.73 * 2.5 - 0.05, -1.05, +0.25, 0.05, 0.5, z + z / 2);
+		veThanhdoc(+0.73 * 2.5 - 0.05, -1.05 * 2.5 + 0.075, 0.25, 0.05, 0.5, z / 2);
+
+		veThanhdoc(+0.73, -3.575, +0.25, 0.05, 0.5, z / 2);
+		veThanhdoc(-0.73, -3.575, +0.25, 0.05, 0.5, z / 2);
+
+		model_mat_cpp = mvstack.pop();
+
+	}
+	void veLucgiac(float x, float y, float z, float sx, float sy, float sz) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 11); // Màu gỗ
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * scale(vec3(sx, sy, sz));
+		veThanhngang(0, 0, 0, 0.05, 0.5, 0.1, 90);
+
+		veThanhngang(-0.18, -0.25, 0, 0.05, 0.5, 0.1, 90 + 60);
+		veThanhngang(-0.18, -0.55, 0, 0.05, 0.5, 0.1, 90 + 60 + 60);
+
+		veThanhngang(0, -0.8, 0, 0.05, 0.5, 0.1, 90);
+
+		veThanhngang(0.33, -0.12, 0, 0.05, 0.5, 0.1, 90 - 60);
+		veThanhngang(0.33, -0.67, 0, 0.05, 0.5, 0.1, 90 - 60 - 60);
+
+
+
+		model_mat_cpp = mvstack.pop();
+
+	}
+	void veConQuayNho(float x, float y, float z, float sx, float sy, float sz) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 11); // Màu gỗ
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * scale(vec3(sx, sy, sz));
+		veLucgiac(0, 0, 0, 1, 1, 1);
+		veLucgiac(0, 0, 0.5, 1, 1, 1);
+
+		veThanhdoc(0.23, 0, 0.25, 0.05, 0.5, +0.5);
+		veThanhdoc(-0.23, 0, 0.25, 0.05, 0.5, +0.5);
+		veThanhdoc(0.45, -0.4, 0.25, 0.05, 0.5, +0.5);
+		veThanhdoc(-0.45, -0.4, 0.25, 0.05, 0.5, +0.5);
+		veThanhdoc(+0.23, -0.8, 0.25, 0.05, 0.5, +0.5);
+		veThanhdoc(-0.23, -0.8, 0.25, 0.05, 0.5, +0.5);
+
+		veThanhngang(0.83, -0.3, 0, 0.05, 1.5, 0.05, -65);
+		veThanhngang(0.83, -0.3, 0.5, 0.05, 1.5, 0.05, -65);
+
+		veThanhngang(-0.86, -0.3, 0, 0.05, 1.5, 0.05, -65);
+		veThanhngang(-0.86, -0.3, 0.5, 0.05, 1.5, 0.05, -65);
+
+		veThanhngang(-0.35, 0.65, 0, 0.05, 1.5, 0.05, 20);
+		veThanhngang(-0.35, 0.65, 0.5, 0.05, 1.5, 0.05, 20);
+
+		veThanhngang(0.35, -1.45, 0, 0.05, 1.5, 0.05, 20);
+		veThanhngang(0.35, -1.45, 0.5, 0.05, 1.5, 0.05, 20);
+		model_mat_cpp = mvstack.pop();
 
 	}
 
 
+	void veConQuay(float x, float y, float z, float sx, float sy, float sz) {
+		mvstack.push(model_mat_cpp);
+		setInt("color", 11); // Màu gỗ
 
-	// Hàm vẽ con quay (hình trụ)
-	void veConQuay() {
+		// Tính thời gian đã trôi qua
+		float elapsed_time = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Chuyển từ mili giây sang giây
+		float speed_factor = 6.0f; // Thêm một hệ số tốc độ quay
+		float angle = isRotating ? (elapsed_time / speed_factor) * 360.0f : 0.0f;
 
+		// Đặt phép quay quanh tâm
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * translate(vec3(0, -1.2, 0)) * rotate_z(22) * rotate_z(angle) * translate(vec3(0, 1.2, 0)) * scale(vec3(sx, sy, sz));
 
+		// Vẽ các phần của đu quay
+		veConQuayNho(0, 0, 0, 1, 1, 1); // Vẽ con quay nhỏ
+		veConQuayTo(0, 0, 0, 1, 1, 1);  // Vẽ con quay lớn
+
+		// Khôi phục lại ma trận trước đó
+		model_mat_cpp = mvstack.pop();
+
+		mvstack.push(model_mat_cpp);
+		// Tính toán thời gian và góc quay
+		float elapsed_time1 = glutGet(GLUT_ELAPSED_TIME) / 1000.0f; // Thời gian tính bằng giây
+		float speed_factor1 = 6.0f; // Hệ số tốc độ quay
+		float angle1 = isRotating ? (elapsed_time / speed_factor) * 360.0f : 0.0f; // Góc quay tính bằng độ
+		float radians1 = angle1 * M_PI / 180.0f; // Chuyển đổi góc từ độ sang radian
+
+		// Bán kính quỹ đạo của ghế quanh tâm
+		float radius = 1.95f; // Khoảng cách từ tâm ConQuayTo tới vị trí ghế
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * translate(vec3(0, -1.8, 0)) * scale(vec3(sx, sy, sz));
+		// Vẽ 8 ghế
+		for (int i = 0; i < 8; i++) {
+			// Tính góc của ghế hiện tại
+			float current_angle1 = radians1 + (i * 45.0f * M_PI / 180.0f); // Cộng thêm góc lệch của ghế (đổi 45 độ sang radian)
+
+			// Tính tọa độ ghế theo quỹ đạo tròn
+			float ghe_x = radius * std::cos(current_angle1); // Tịnh tiến x theo góc quay
+			float ghe_y = radius * std::sin(current_angle1); // Tịnh tiến y theo góc quay
+			float ghe_z = 0.2f;                            // Giữ nguyên độ cao (z)
+
+			// Vẽ từng ghế
+			mvstack.push(model_mat_cpp); // Lưu trạng thái trước khi vẽ ghế
+			model_mat_cpp = model_mat_cpp * translate(vec3(ghe_x, ghe_y, ghe_z)); // Tịnh tiến ghế theo vị trí đã tính
+			veGhe(0, 0, 0, 1, 1, 1); // Vẽ ghế
+			model_mat_cpp = mvstack.pop();
+		}
+
+		// Khôi phục trạng thái ban đầu sau khi hoàn thành
+		model_mat_cpp = mvstack.pop();
 	}
-
 	// Hàm vẽ đế (hình trụ lớn hoặc hình nón)
-	void veDe() {
+	void veDe(float x, float y, float z, float sx, float sy, float sz) {
 		// Lưu trạng thái ma trận ban đầu
 		mvstack.push(model_mat_cpp);
 
-		setInt("color", 4);  // Đặt màu cho giá đỡ bánh xe
+		setInt("color", 13);  // Đặt màu cho giá đỡ bánh xe
+		model_mat_cpp = model_mat_cpp * translate(vec3(x, y, z)) * scale(vec3(sx, sy, sz));
+		veThanhngang(0.8, 0.1, -0.2, 0.1, 3, 0.1, 25);
+		veThanhngang(-0.8, 0.1, -0.2, 0.1, 3, 0.1, -25);
 
-		// Tham số cho các vị trí và góc xoay của mỗi giá đỡ
-		vec3 positions[4] = {
-			vec3(2.0f, 0.0f, 0.2f),
-			vec3(-2.0f, 0.0f, 0.2f),
-			vec3(-2.0f, 0.0f, 1.5f),
-			vec3(2.0f, 0.0f, 1.5f)
-		};
+		veThanhngang(0.8, 0.1, 0.7, 0.1, 3, 0.1, 25);
+		veThanhngang(-0.8, 0.1, 0.7, 0.1, 3, 0.1, -25);
 
-		float rotations[4] = { 35.0f, -35.0f, -35.0f, 35.0f };
-
-		for (int i = 0; i < 4; i++) {
-			// Khởi tạo ma trận instance với phép biến đổi riêng cho mỗi giá đỡ
-			mat4 instance = identity_mat4();
-			instance = translate(positions[i]) * rotate_z(rotations[i]) * scale(vec3(0.3f, 6.0f, 0.2f)); // Vị trí và xoay mỗi giá đỡ
-			mat4 model_support = model_mat_cpp * instance; // Biến đổi cuối cùng cho mỗi giá đỡ
-
-			// Cập nhật ma trận mô hình và vẽ giá đỡ
-			glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, model_support.m);
-			glDrawArrays(GL_TRIANGLES, 0, 36); // Vẽ mô hình giá đỡ (giả định sử dụng 36 điểm)
-
-			// Phục hồi lại model_mat_cpp để tiếp tục với giá đỡ tiếp theo
-			model_mat_cpp = mvstack.pop();
-			mvstack.push(model_mat_cpp);
-		}
-		mat4 support = model_mat_cpp * (translate(vec3(0.0f, 2.5f, 0.7f)) * rotate_z(45.0f) * scale(vec3(1.15f, 1.15f, 1.7f)));
-		glUniformMatrix4fv(model_mat_location, 1, GL_FALSE, support.m);
-		glDrawArrays(GL_TRIANGLES, 0, 36);
-		// Phục hồi trạng thái ma trận gốc
 		model_mat_cpp = mvstack.pop();
 	}
 
 
-	void veDuQuay() {
-		// Vẽ đế
-		veDe();
-
-		// Vẽ con quay
-		veConQuay();
-
-		// Vẽ ghế (gắn nhiều ghế vào vòng quay)
-		for (int i = 0; i < 6; ++i) {  // Giả sử có 6 ghế
-			mvstack.push(model_mat_cpp);
-			mat4 instance = identity_mat4();
-			float angle = i * 2 * 3.14159265359f / 6.0f;  // Tính góc phân chia đều giữa các ghế
-			instance = translate(vec3(cos(angle) * 2.5f, 2.0f, sin(angle) * 2.5f));  // Vị trí ghế trên vòng quay
-			model_mat_cpp = model_mat_cpp * instance;
-			veGhe();  // Vẽ ghế
-
-			model_mat_cpp = mvstack.pop();
-		}
-
-	}
-
-	// Hàm vẽ đu quay hoàn chỉnh (bao gồm ghế, con quay và đế)
-	void veDuQuay(float tx, float ty, float tz, float sx, float sy, float sz) {
-		mvstack.push(model_mat_cpp);
-
-		mat4 transform = translate(vec3(tx, ty, tz)) * scale(vec3(sx, sy, sz));
-		model_mat_cpp = model_mat_cpp * transform;
-
-		// Vẽ đu quay hoàn chỉnh
-		veDuQuay();
-
-		model_mat_cpp = mvstack.pop();
+	void veDuQuay(float x, float y, float z, float sx, float sy, float sz) {
+		veConQuay(x, y, z, sx, sy, sz);
+		veDe(x, y - 5.5, z, sx, sy + 0.5, sz);
+		veTruc(x, y - 1.25, z, sx - 1.5, sy - 1.5, sz + 0.5);
 	}
 
 
@@ -981,18 +1155,16 @@ void DisplayFunc(void)
 
 	//Cây cối
 	cay::vecay(20, 0, 15, 1.4, 1.6, 1);
-	cay::vecay(15, 0, 15, 1.4, 1.6, 1);
-	cay::vecay(20, 0, 20, 1.4, 1.6, 1);
-	hangrao::veHangRao(20, -0.75, 13, 1, 10, 0.1, 0.8, 0.1, 3, 0.1, 0.1); //float startX, float startY, float startZ, float spacing( khoảng cách giữa các cột)
+	hangrao::veHangRao(20, -0.75, 13, 1, 10, 0.1, 0.8, 0.1, 3, 0.1, 0.1, 90); //float startX, float startY, float startZ, float spacing( khoảng cách giữa các cột)
 	//, int numColumns,float columnWidth, float columnHeight, float columnDepth,
-	//float barWidth, float barHeight, float barDepth) {
+	//float barWidth, float barHeight, float barDepth, float rotate) {
 	//Đu quay
-	duquay::veDe();
+	duquay::veDuQuay(8, 9, 8, 3, 3, 3);  // k sửa scale
 	// Thùng rác 
 	veThungrac(15, -0.8, 11, 0.5, 0.7, 0.5);
 	//Đèn đường
-	denduong(17, 1.2, 11, 0.25, 5, 0.25);
-	denduong(13, 1.2, 11, 0.25, 5, 0.25);
+	denduong(17, 1.2, 11, 0.25, 5, 0.25, 0);
+	denduong(13, 1.2, 0, 0.25, 5, 0.25, 90);
 	model_mat_cpp = mvstack.pop();
 
 	glutSwapBuffers();
@@ -1151,9 +1323,13 @@ void KeyboardFunc(unsigned char key, int x, int y)
 		break;
 		// Đèn
 	case 'b':
-		moden = !moden;
+		moden = !moden; // Thay đổi trạng thái tổng
+		break;
+	case 'p':
+		isRotating = !isRotating;
 		break;
 	}
+
 
 }
 // ----------------------------------------
